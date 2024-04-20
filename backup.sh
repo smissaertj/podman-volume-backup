@@ -2,42 +2,49 @@
 
 # TODO - Check if requirements are met
 # TODO - Upload the compressed file to Cloud Storage using rclone
-# TODO - Create and append to a log file
 # TODO - Email the log file
 # TODO - Create Systemd Service Unit and Timer
 
+
+# Writes arguments to the end of log file
+write_log() {
+    timestamp=$(date +"%Y%m%d")
+    log_file="~/podman_exports/${timestamp}.log"
+    printf "$(date -u) : $1\n" >> "$log_file"
+}
+
 # Function to pause the container
 pause_container() {
-    echo "Pausing container for backup"
+    write_log "Pausing container for backup"
     /usr/bin/podman pause "${1}"
 }
 
 # Function to export the Podman Volume
 export_volume() {
-    echo "Exporting Podman Volume: ${1}..."
+    write_log "Exporting Podman Volume: ${1}..."
     /usr/bin/podman volume export "${1}" --output "${export_path}/${1}-${timestamp}".tar
     # Check if the podman volume export was successful
     if [ $? -ne 0 ]; then
-        echo "An error occurred while exporting podman volume ${1}"
+        write_log "An error occurred while exporting podman volume ${1}"
         exit 1
     fi
 }
 
 # Function to unpause the container
 unpause_container() {
-    echo "Resuming container ${1}"
+    write_log "Resuming container ${1}"
     /usr/bin/podman unpause "${1}"
 }
 
 # Function to compress the exported Podman Volume
 compress_volume() {
-    echo "Compressing volume: ${1}"
+    write_log "Compressing volume: ${1}"
     /usr/bin/xz -ze "${export_path}/${1}-${timestamp}.tar"
     # Check if the tar command was successful
     if [ $? -eq 0 ]; then
-        echo "Archiving successful."
+        write_log "Archiving successful."
     else
-        echo "An error occurred during volume compression."
+        write_log "An error occurred during volume compression."
         exit 1
     fi
 }
@@ -45,13 +52,13 @@ compress_volume() {
 # Function to upload the compressed files to Cloud Storage using rclone
 upload_to_cloud() {
     # TODO: Implement upload logic with rclone
-    echo "Uploading compressed files to Cloud Storage using rclone..."
+    write_log "Uploading compressed files to Cloud Storage using rclone..."
     # Placeholder for upload logic
 }
 
 # Function to remove exported files after successful upload
 remove_files() {
-    echo "Archiving successful, removing files"
+    write_log "Archiving successful, removing files"
     find "${export_path}" -maxdepth 1 -type f -exec rm -f {} \;
 }
 
@@ -64,7 +71,10 @@ main() {
     volume="syncthing"
 
     # Set timestamp for unique filename
-    timestamp=$(date +"%Y%m%d%H%M%S")
+    timestamp=$(date +"%Y%m%d")
+
+    # Truncate the log
+    /usr/bin/truncate -0 "${export_path}/${timestamp}.log"
 
     # Pause the container
     pause_container "${volume}"
@@ -84,7 +94,7 @@ main() {
     # Remove exported files after successful upload
     remove_files
 
-    echo "Backup Complete"
+    write_log "Backup Complete"
     exit 0
 }
 
