@@ -5,17 +5,19 @@
 # TODO - Email the log file
 # TODO - Create Systemd Service Unit and Timer
 
-
 # Writes arguments to the end of log file
 write_log() {
     timestamp=$(date +"%Y%m%d")
-    log_file="~/podman_exports/${timestamp}.log"
+    log_file="${export_path}/${timestamp}.log"
+    if [ ! -f "${log_file}" ]; then
+        touch "${log_file}"
+    fi
     printf "$(date -u) : $1\n" >> "$log_file"
 }
 
 # Function to pause the container
 pause_container() {
-    write_log "Pausing container for backup"
+    write_log "Pausing container ${1} for backup"
     /usr/bin/podman pause "${1}"
 }
 
@@ -59,7 +61,7 @@ upload_to_cloud() {
 # Function to remove exported files after successful upload
 remove_files() {
     write_log "Archiving successful, removing files"
-    find "${export_path}" -maxdepth 1 -type f -exec rm -f {} \;
+    find "${export_path}" -maxdepth 1 -type f ! --name "*.log" -exec rm -f {} \;
 }
 
 # Main function
@@ -68,13 +70,10 @@ main() {
     export_path=~/podman_exports
 
     # Set volume name
-    volume="syncthing"
+    volume="transmission"
 
     # Set timestamp for unique filename
     timestamp=$(date +"%Y%m%d")
-
-    # Truncate the log
-    /usr/bin/truncate -0 "${export_path}/${timestamp}.log"
 
     # Pause the container
     pause_container "${volume}"
