@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# TODO - Check if requirements are met
-# TODO - Upload the compressed file to Cloud Storage using rclone
+# TODO - Create a .env file in the project root
+# TODO - Parse the .env file
+# TODO - Upload the encrypted file to Wasabi
 # TODO - Email the log file
 # TODO - Create Systemd Service Unit and Timer
 
@@ -13,6 +14,7 @@ write_log() {
         touch "${log_file}"
     fi
     printf "$(date -u) : $1\n" >> "$log_file"
+    echo "${1}"
 }
 
 # Function to pause the container
@@ -24,7 +26,7 @@ pause_container() {
 # Function to export the Podman Volume
 export_volume() {
     write_log "Exporting Podman Volume: ${1}..."
-    /usr/bin/podman volume export "${1}" --output "${export_path}/${1}-${timestamp}".tar
+    /usr/bin/podman volume export "${1}" --output "${export_path}/${1}-${timestamp}.tar"
     # Check if the podman volume export was successful
     if [ $? -ne 0 ]; then
         write_log "An error occurred while exporting podman volume ${1}"
@@ -51,11 +53,26 @@ compress_volume() {
     fi
 }
 
-# Function to upload the compressed files to Cloud Storage using rclone
+# Function to encrypt the compressed file
+encrypt_file() {
+  if [ "$(/usr/bin/gpg --list-keys | grep -q ${gpg_recipient}; echo $?)" -eq 0 ]; then
+      write_log "GPG Recipient Public Key Found. Encrypting..."
+      /usr/bin/gpg --trust-model always --recipient "${gpg_recipient}" --output "${export_path}/${1}-${timestamp}.tar.xz.gpg" --encrypt "${export_path}/${1}-${timestamp}.tar.xz"
+  else
+      write_log "GPG Recipient Public Key Not Found. Aborting..."
+      exit 1
+  fi
+}
+
+# Function to upload the compressed files to Wasabi using cURL
 upload_to_cloud() {
-    # TODO: Implement upload logic with rclone
-    write_log "Uploading compressed files to Cloud Storage using rclone..."
-    # Placeholder for upload logic
+    # TODO: Implement upload logic with cURL
+    write_log "Uploading encrypted file to Wasabi: ${export_path}/${1}-${timestamp}.tar.xz.gpg"
+#    curl --location --request PUT 'https://<account-id>.r2.cloudflarestorage.com/<r2-bucket>/<r2-object>' \
+#    --header 'Authorization: Bearer undefined' \
+#    --header 'x-amz-content-sha256: UNSIGNED-PAYLOAD' \
+#    --header 'Content-Type: text/plain' \
+#    --data '@GPeeGZTRk/cat-pic.jpg'
 }
 
 # Function to remove exported files after successful upload
@@ -75,6 +92,10 @@ main() {
     # Set timestamp for unique filename
     timestamp=$(date +"%Y%m%d")
 
+    # TODO - Read and parse the dot env file.
+
+    # TODO - Test the Wasabi Connection
+
     # Pause the container
     pause_container "${volume}"
 
@@ -87,13 +108,23 @@ main() {
     # Compress the exported Podman Volume
     compress_volume "${volume}"
 
-    # Upload the compressed files to Cloud Storage using rclone
-    upload_to_cloud
+    # Encrypt the compressed file using GPG
+    encrypt_file "${volume}"
+
+    # TODO - Generate and store an MD5 checksum of the compressed file
+
+    # Upload the compressed files to Cloud Storage using cURL
+    upload_to_cloud "${volume}"
+
+    # TODO - Compare the ETag value in the Response Body against the stored MD5 checksum
 
     # Remove exported files after successful upload
     remove_files
 
     write_log "Backup Complete"
+
+    # TODO - Email the log file
+
     exit 0
 }
 
